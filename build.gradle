@@ -13,16 +13,16 @@ configurations {
     provided
 }
 
-version = "0.3.0"
+version = "0.1.0"
 
-sourceCompatibility = 1.7
-targetCompatibility = 1.7
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
 
 dependencies {
-    compile  "org.embulk:embulk-core:0.8.15"
-    provided "org.embulk:embulk-core:0.8.15"
-    // compile "YOUR_JAR_DEPENDENCY_GROUP:YOUR_JAR_DEPENDENCY_MODULE:YOUR_JAR_DEPENDENCY_VERSION"
+    compile  "org.embulk:embulk-core:0.8.36"
+    provided "org.embulk:embulk-core:0.8.36"
     compile  "org.apache.kafka:kafka-clients:0.11.0.1"
+    // compile "YOUR_JAR_DEPENDENCY_GROUP:YOUR_JAR_DEPENDENCY_MODULE:YOUR_JAR_DEPENDENCY_VERSION"
     testCompile "junit:junit:4.+"
 }
 
@@ -61,9 +61,11 @@ task gemPush(type: JRubyExec, dependsOn: ["gem"]) {
     script "pkg/${project.name}-${project.version}.gem"
 }
 
-task "package"(dependsOn: ["gemspec", "classpath"]) << {
-    println "> Build succeeded."
-    println "> You can run embulk with '-L ${file(".").absolutePath}' argument."
+task "package"(dependsOn: ["gemspec", "classpath"]) {
+    doLast {
+        println "> Build succeeded."
+        println "> You can run embulk with '-L ${file(".").absolutePath}' argument."
+    }
 }
 
 task gemspec {
@@ -74,12 +76,12 @@ task gemspec {
 Gem::Specification.new do |spec|
   spec.name          = "${project.name}"
   spec.version       = "${project.version}"
-  spec.authors       = ["Sasaki Toru"]
+  spec.authors       = ["Jakub Hettler"]
   spec.summary       = %[Kafka input plugin for Embulk]
   spec.description   = %[Loads records from Kafka.]
-  spec.email         = ["sasakitoa@nttdata.co.jp"]
+  spec.email         = ["jakub.hettler@lmc.eu"]
   spec.licenses      = ["MIT"]
-  # TODO set this: spec.homepage      = "https://github.com/sasakitoa/embulk-input-kafka"
+  # TODO set this: spec.homepage      = "https://github.com/jakub.hettler/embulk-input-kafka"
 
   spec.files         = `git ls-files`.split("\n") + Dir["classpath/*.jar"]
   spec.test_files    = spec.files.grep(%r"^(test|spec)/")

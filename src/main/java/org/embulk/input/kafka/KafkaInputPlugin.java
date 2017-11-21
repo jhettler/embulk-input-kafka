@@ -99,21 +99,22 @@ public class KafkaInputPlugin implements InputPlugin {
         KafkaProperties props = new KafkaProperties(task);
         KafkaConsumer<?, ?> consumer = new KafkaConsumer<>(props);
         consumer.subscribe(task.getTopics());
+        long lag = getCountToRead(consumer, task);
         setOffsetPosition(consumer, task);
 
         long readRecords = 0;
-        long showReadRecords = 500;
+        long showReadRecords = 1000;
         while(true) {
             ConsumerRecords<?,?> records = consumer.poll(task.getPollTimeoutSec() * 1000);
-            if(records.count() == 0) {
-                break;
-            }
             readRecords += records.count();
             columns.setOutputRecords(builder, records);
             builder.flush();
             if(readRecords >= showReadRecords) {
                 logger.info(String.format("Read %d record(s) in task-%d", readRecords, taskIndex));
-                showReadRecords *= 2;
+                showReadRecords += 1000;
+            }
+            if(records.count() == 0 || readRecords > lag) {
+                break;
             }
         }
         builder.close();
@@ -130,11 +131,11 @@ public class KafkaInputPlugin implements InputPlugin {
 
     private void setOffsetPosition(KafkaConsumer<?, ?> consumer, PluginTask task) {
         // Set all offset belongs subscribing topics to beginning
-        if(task.getLoadFromBeginning()) {
+        if (task.getLoadFromBeginning()) {
             consumer.poll(0);
-            for(String topic : task.getTopics()) {
+            for (String topic : task.getTopics()) {
                 List<TopicPartition> tpList = new LinkedList<>();
-                for(PartitionInfo info :consumer.partitionsFor(topic)) {
+                for (PartitionInfo info : consumer.partitionsFor(topic)) {
                     tpList.add(new TopicPartition(info.topic(), info.partition()));
                     logger.debug(String.format("TopicPartition \"%s-%d\" were set offset beginning.", info.topic(), info.partition()));
                 }
@@ -142,15 +143,15 @@ public class KafkaInputPlugin implements InputPlugin {
             }
             logger.info("All partition(s) of subscribing topics were set offset beginning.");
 
-            if(task.getSeek().isPresent()) {
+            if (task.getSeek().isPresent()) {
                 logger.info("Some offset position will reconfigure because 'seek' option is specified.");
             }
         }
 
         // Set offset position specified in seek option
-        if(task.getSeek().isPresent()) {
-            for(ToStringMap conf : task.getSeek().get()) {
-                if(!conf.containsKey("topic") || !conf.containsKey("partition") || !conf.containsKey("offset")) {
+        if (task.getSeek().isPresent()) {
+            for (ToStringMap conf : task.getSeek().get()) {
+                if (!conf.containsKey("topic") || !conf.containsKey("partition") || !conf.containsKey("offset")) {
                     throw new IllegalArgumentException("All of 'topic', 'partition', 'offset' should be specified in seek option.");
                 }
                 try {
@@ -165,4 +166,36 @@ public class KafkaInputPlugin implements InputPlugin {
             }
         }
     }
+
+    private long getCountToRead(KafkaConsumer<?, ?> consumer, PluginTask task) {
+            consumer.poll(0);
+            long endPosition = 0;
+            long actualOffset = 0;
+            long lag = 0;
+            for (String topic : task.getTopics()) {
+                List<TopicPartition> tpList = new LinkedList<>();
+                for (PartitionInfo info : consumer.partitionsFor(topic)) {
+                    tpList.add(new TopicPartition(info.topic(), info.partition()));
+                }
+
+                //get current offset
+                actualOffset = consumer.position(tpList.get(0)) - 1;
+
+                //get last message offset
+                consumer.seekToEnd(tpList);
+                endPosition = consumer.position(tpList.get(0));
+
+                //get count of unprocessed messages
+                lag = endPosition - actualOffset;
+
+                //reset current position to the current offset
+                consumer.seek(tpList.get(0),actualOffset);
+
+                logger.info(String.format("Reading at least %d messages from offset %d in this batch.", lag, actualOffset));
+
+            }
+        return lag;
+
+    }
+
 }

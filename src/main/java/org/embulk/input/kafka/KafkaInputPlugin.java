@@ -113,7 +113,7 @@ public class KafkaInputPlugin implements InputPlugin {
                 logger.info(String.format("Read %d record(s) in task-%d", readRecords, taskIndex));
                 showReadRecords += 1000;
             }
-            if(records.count() == 0 || readRecords > lag) {
+            if(readRecords > lag) {
                 break;
             }
         }
